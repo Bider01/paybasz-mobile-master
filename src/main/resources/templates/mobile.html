@@ -116,6 +116,7 @@
     function initNFC() {
         setBackground("#000000");
         displayText('NFC: ON');
+        nfcListener = async function(x) { };
         try {
             const ndef = new NDEFReader();
             ndef.scan();
