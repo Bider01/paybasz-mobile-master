@@ -55,7 +55,8 @@
     <button onclick="initBalance()">EGYENLEG</button><br>
     <button onclick="initPay()">FIZETÉS</button><br>
     <button onclick="initCard()">KÁRTYA</button><br>
-    <button onclick="initOk()">OK</button>
+    <button onclick="initUpload()" hidden="hidden" id="upload">FELTÖLTÉS</button><br>
+    <button onclick="initOk()" ondblclick="checkAuth()">OK</button>
 
 
 
@@ -64,7 +65,7 @@
 <script th:inline="javascript">
     const gatewayName = /*[[${gatewayName}]]*/ "mobilGw";
     const token = /*[[${token}]]*/ "token";
-    const baseUrl = "https://192.168.0.150:6006/api/v2";
+    const baseUrl = "https://192.168.0.150:6006/Mapi";
     let nfcListener = async function(card) {};
 
     async function test() {
@@ -76,6 +77,38 @@
             })
             .catch((error) => {
                 displayText("error", hashed, error);
+                console.error('Error:', error);
+            });
+    }
+
+    async function checkAuth() {
+        const upload = document.getElementById("upload");
+        await httpFetchData('POST', baseUrl + '/validate-uploader/' + gatewayName, { gatewayCode: token })
+            .then(data => {
+                if (data === "OK") {
+                    upload.hidden = false;
+                    displayText("UPLOADER", data);
+                    setBackground("#89f7fe");
+                } else {
+                    upload.hidden = true;
+                    httpFetchData('POST', baseUrl + '/validate/' + gatewayName, { gatewayCode: token })
+                        .then(data => {
+                            if (data === "INVALID") {
+                                displayText("UNAUTHORIZED_TERMINAL");
+                                setBackground("#FF0000");
+                            } else {
+                                displayText("NORMAL", data);
+                                setBackground("#0000FF");
+                            }
+                        })
+                        .catch((error) => {
+                            displayText("error", error);
+                            console.error('Error:', error);
+                        });
+                }
+            })
+            .catch((error) => {
+                displayText("error", error);
                 console.error('Error:', error);
             });
     }
@@ -219,6 +252,42 @@
             }
         } else {
             displayText("KÁRTYA HOZZÁRENDELÉS", "hibás formátum", id);
+        }
+
+    }
+
+    function initUpload() {
+        setBackground("#000000");
+        displayText("FELTÖLTÉS");
+        let text;
+        let money = prompt("Összege [JMF]", "");
+        if (money == null || money == "") {
+            displayText("FELTÖLTÉS", "megszakítva");
+            return;
+        } else if (parseInt(money) != NaN) {
+            displayText("FELTÖLTÉS ÖSSZEG", money);
+            nfcListener = async function(hashed) {
+                await httpFetchData('POST', baseUrl + '/upload/' + gatewayName, { card: hashed, amount: parseInt(money), gatewayCode: token, details: money })
+                    .then(data => {
+                        if (data === "ACCEPTED") {
+                            setBackground("#00FF00");
+                        } else {
+                            setBackground("#FF0000");
+                        }
+                        displayText("FELTÖLTÉS", "státusz:", data);
+                        nfcListener = async function(x) {
+                            displayText("FELTÖLTÉS", "(új beolvasás, de nem új fizetés)", data);
+                        };
+                    })
+                    .catch((error) => {
+                        setBackground("#FF0000");
+                        displayText("HIBA", hashed, error);
+                        console.error('Error:', error);
+                        nfcListener = async function(x) {};
+                    });
+            }
+        } else {
+            displayText("FELTÖLTÉS", "hibás formátum", money);
         }
 
     }
